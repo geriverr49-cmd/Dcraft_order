@@ -1,0 +1,19 @@
+name: SiparisPlugin
+version: 1.0.0
+main: com.example.siparis.SiparisPlugin
+api-version: 1.21
+author: Sen
+description: Premium siparis sistemi
+
+commands:
+  siparis:
+    description: Siparis menusu
+    aliases: [order]
+  siparisonayla:
+    description: Siparisi onayla
+  siparisiptal:
+    description: Siparisi iptal et
+  siparisler:
+    description: Bekleyen siparisler
+    permission: siparis.admin
+    permission-message: "§cYetkin yok!"
