@@ -442,7 +442,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                 yml.set("siparisler." + id + ".birim_fiyat", fiyat);
                 yml.set("siparisler." + id + ".toplam_fiyat", toplam);
                 
-                // DÜZELTİLEN KISIM: IOException yakalaması eklendi
                 try {
                     yml.save(pazarDosya);
                 } catch (IOException ioEx) {
@@ -501,4 +500,4 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         else { int i = 1; for (String s : liste) p.sendMessage("§e" + i++ + ". §f" + s); }
         p.sendMessage("§8§m----------------------------");
     }
-            }
+                }
