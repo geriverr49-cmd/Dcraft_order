@@ -57,7 +57,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             }
         }
 
-        // Komutları güvenli bir şekilde kaydediyoruz
         if (getCommand("siparis") != null) getCommand("siparis").setExecutor(this);
         if (getCommand("siparisonayla") != null) getCommand("siparisonayla").setExecutor(this);
         if (getCommand("siparisiptal") != null) getCommand("siparisiptal").setExecutor(this);
@@ -202,7 +201,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         inv.setItem(15, puan);
 
         ItemStack cam = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cm.setItemMeta(cm); }
+        ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cam.setItemMeta(cm); }
         for (int i = 0; i < 27; i++) if (inv.getItem(i) == null) inv.setItem(i, cam);
 
         p.openInventory(inv);
@@ -502,4 +501,4 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         else { int i = 1; for (String s : liste) p.sendMessage("§e" + i++ + ". §f" + s); }
         p.sendMessage("§8§m----------------------------");
     }
-                    }
+                                         }
