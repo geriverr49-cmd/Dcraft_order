@@ -16,8 +16,8 @@
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
         <repository>
-            <id>codemc-repo</id>
-            <url>https://repo.codemc.io/repository/maven-public/</url>
+            <id>rosewood-repo</id>
+            <url>https://repo.rosewooddev.io/repository/public/</url>
         </repository>
         <repository>
             <id>jitpack.io</id>
@@ -42,8 +42,8 @@
         <!-- PlayerPoints API -->
         <dependency>
             <groupId>org.black_ixx</groupId>
-            <artifactId>PlayerPoints</artifactId>
-            <version>3.2.5</version>
+            <artifactId>playerpoints</artifactId>
+            <version>3.3.3</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
