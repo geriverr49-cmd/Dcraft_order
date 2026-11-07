@@ -36,7 +36,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
     private final Map<UUID, String> TESLIMAT_SIPARIS_ID = new HashMap<>();
 
     private File orderDosya;
-    private File bekleyenDosya; // Çevrimdışı eşyalar için
+    private File bekleyenDosya;
     private Economy econ = null;
     private Object ppAPI = null;
 
@@ -61,7 +61,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
 
         if (getCommand("siparis") != null) getCommand("siparis").setExecutor(this);
         Bukkit.getPluginManager().registerEvents(this, this);
-        getLogger().info("Premium Order Sistemi (Zirhlı Sürüm) aktif!");
+        getLogger().info("Premium Order Sistemi (Limitli Sürüm) aktif!");
     }
 
     @Override
@@ -75,7 +75,28 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         return true;
     }
 
-    // --- ÇEVRİMDIŞI EŞYA TESLİMATI ---
+    // --- SINIR HESAPLAMA FONKSİYONLARI ---
+    private int getSiparisLimiti(Player p) {
+        if (p.hasPermission("siparis.limit.admin")) return 999;
+        if (p.hasPermission("siparis.limit.media")) return 20;
+        if (p.hasPermission("siparis.limit.vip")) return 10;
+        return 5; // Normal oyuncu limiti 5 YAPILDI
+    }
+
+    private int getAktifSiparisSayisi(Player p) {
+        int sayi = 0;
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(orderDosya);
+        if (yml.contains("siparisler")) {
+            ConfigurationSection sec = yml.getConfigurationSection("siparisler");
+            for (String id : sec.getKeys(false)) {
+                if (sec.getString(id + ".oyuncu").equals(p.getName())) {
+                    sayi++;
+                }
+            }
+        }
+        return sayi;
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
@@ -171,7 +192,11 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         ItemMeta verMeta = ver.getItemMeta();
         if (verMeta != null) {
             verMeta.setDisplayName("§a§lSİPARİŞ VER");
-            verMeta.setLore(Arrays.asList("§7Yeni bir sipariş oluştur.", "§eTıkla ve ihtiyacın olanı iste!"));
+            verMeta.setLore(Arrays.asList(
+                "§7Yeni bir sipariş oluştur.", 
+                "§7Aktif Siparişin: §e" + getAktifSiparisSayisi(p) + "§7/§e" + getSiparisLimiti(p),
+                "§eTıkla ve ihtiyacın olanı iste!"
+            ));
             verMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             verMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             ver.setItemMeta(verMeta);
@@ -450,22 +475,18 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         String title = e.getView().getTitle();
         ItemStack clicked = e.getCurrentItem();
 
-        // --- TESLİMAT MENÜSÜ TIKLAMALARI ---
         if (title.contains("§8§l» §6§lTESLİMAT:")) {
-            // Alt envanteri (oyuncunun kendi envanteri) serbest bırak
             if (e.getClickedInventory() == null || e.getClickedInventory().equals(e.getView().getBottomInventory())) {
                 return; 
             }
             
             if (clicked == null) { e.setCancelled(true); return; }
 
-            // Sadece butonlara tıklamayı engelle, eşya koymaya izin ver
             if (clicked.getType() == Material.BLACK_STAINED_GLASS_PANE || 
                 clicked.getType() == Material.LIME_STAINED_GLASS_PANE || 
                 clicked.getType() == Material.BARRIER) {
                 e.setCancelled(true);
             } else {
-                // Eğer menüdeki eşyaya tıklıyorsa (geri almak için)
                 return; 
             }
 
@@ -481,7 +502,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
 
         if (clicked == null) return;
         
-        // --- ANA MENÜ ---
         if (title.equals("§8§l» §6§lORDER SİSTEMİ §8§l«")) {
             e.setCancelled(true);
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -494,7 +514,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                 for (String s : clicked.getItemMeta().getLore()) {
                     if (s.startsWith("§8ID: ")) { 
                         String id = s.replace("§8ID: ", "");
-                        // Eğer "Senin Siparişlerin" menüsündeyse İPTAL et, değilse TESLİM ET.
                         if (e.getView().getTitle().contains("ORDER SİSTEMİ") && clicked.getItemMeta().getLore().contains("§cSiparişi iptal etmek için tıkla!")) {
                             siparisiIptalEt(p, id);
                         } else {
@@ -507,7 +526,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             return;
         }
 
-        // --- FİLTRE MENÜSÜ ---
         if (title.equals("§8§l» §6§lFİLTRELE §8§l«")) {
             e.setCancelled(true);
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
@@ -525,7 +543,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             return;
         }
 
-        // --- SİPARİŞ OLUŞTUR ---
         if (title.equals("§8§l» §6§lSİPARİŞ OLUŞTUR §8§l«")) {
             e.setCancelled(true);
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -541,7 +558,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             return;
         }
 
-        // --- EŞYA SEÇ ---
         if (title.equals("§8§l» §6§lEŞYA SEÇ §8§l«")) {
             e.setCancelled(true);
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -554,7 +570,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             return;
         }
 
-        // --- BİRİM SEÇ ---
         if (title.equals("§8§l» §6§lBİRİM SEÇ §8§l«")) {
             e.setCancelled(true);
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -578,7 +593,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         double toplam = yml.getDouble(path + ".toplam_fiyat");
         String birim = yml.getString(path + ".birim");
 
-        // Parayı İade Et
         if (birim.equals("para")) {
             if (econ != null) econ.depositPlayer(p, toplam);
         } else {
@@ -597,6 +611,17 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
     }
 
     private void siparisiKaydet(Player p, String birim) {
+        int mevcutSiparis = getAktifSiparisSayisi(p);
+        int limit = getSiparisLimiti(p);
+        
+        if (mevcutSiparis >= limit) {
+            p.sendMessage("§cSipariş limitine ulaştın! Maksimum: §e" + limit + " §cSipariş.");
+            p.sendMessage("§7Mevcut siparişlerini iptal ederek yenisini açabilirsin.");
+            p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+            p.closeInventory();
+            return;
+        }
+
         String esya = ESYA.get(p.getUniqueId());
         int miktar = MIKTAR.get(p.getUniqueId());
         double fiyat = FIYAT.get(p.getUniqueId());
@@ -663,7 +688,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         
         String siparisSahibiIsim = yml.getString(path + ".oyuncu");
         
-        // KENDİ SİPARİŞİNİ TESLİM ETMEYİ ENGELLE
         if (islemYapan.getName().equals(siparisSahibiIsim)) {
             islemYapan.sendMessage("§cKendi siparişini teslim edemezsin!");
             islemYapan.closeInventory();
@@ -723,7 +747,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             if (econ != null) econ.depositPlayer(islemYapan, odenecekPara);
         }
 
-        // EŞYAYI SİPARİŞ SAHİBİNE GÖNDER (Envanter doluysa yere düşür veya bekleyenlere at)
         Player siparisSahibi = Bukkit.getPlayer(siparisSahibiIsim);
         ItemStack verilecekEsya = new ItemStack(hedefMat, teslimEdilenMiktar);
         
@@ -733,7 +756,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             siparisSahibi.sendMessage("§a[Order] §e" + islemYapan.getName() + " §7sana §e" + teslimEdilenMiktar + " " + hedefMat.name() + " §7gönderdi!");
             siparisSahibi.playSound(siparisSahibi.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
         } else {
-            // Çevrimdışıysa bekleyen dosyasına kaydet
             YamlConfiguration bekleyenYml = YamlConfiguration.loadConfiguration(bekleyenDosya);
             String uuidStr = Bukkit.getOfflinePlayer(siparisSahibiIsim).getUniqueId().toString();
             bekleyenYml.set(uuidStr + "." + System.currentTimeMillis(), hedefMat.name() + ":" + teslimEdilenMiktar);
