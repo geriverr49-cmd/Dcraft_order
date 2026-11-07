@@ -43,13 +43,11 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             try { pazarDosya.createNewFile(); } catch (IOException e) { e.printStackTrace(); }
         }
 
-        // Vault Ekonomi Bağlantısı
         if (getServer().getPluginManager().getPlugin("Vault") != null) {
             RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
             if (rsp != null) econ = rsp.getProvider();
         }
 
-        // PlayerPoints Bağlantısı (Reflection ile)
         Plugin ppPlugin = getServer().getPluginManager().getPlugin("PlayerPoints");
         if (ppPlugin != null && ppPlugin.isEnabled()) {
             try {
@@ -301,7 +299,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         }
     }
 
-    // YENİ NESİL SATIN ALMA MANTIĞI (Hatasız Derleme İçin)
     private void satinAl(Player alici, String siparisId) {
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(pazarDosya);
         String path = "siparisler." + siparisId;
@@ -323,20 +320,17 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             return;
         }
 
-        // PUAN İLE ALIM
         if (birim.equals("puan")) {
             if (ppAPI == null) {
                 alici.sendMessage("§cPlayerPoints eklentisi bulunamadı veya aktif değil!");
                 return;
             }
             try {
-                // Bakiye kontrolü (Reflection)
                 int bakiye = (int) ppAPI.getClass().getMethod("look", UUID.class).invoke(ppAPI, alici.getUniqueId());
                 if (bakiye < toplamFiyat) {
                     alici.sendMessage("§cYetersiz Dcraft Puanın! Gerekli: §e" + toplamFiyat);
                     return;
                 }
-                // Puanı düş
                 ppAPI.getClass().getMethod("take", UUID.class, int.class).invoke(ppAPI, alici.getUniqueId(), (int) toplamFiyat);
                 
                 Player satici = Bukkit.getPlayer(saticiIsim);
@@ -350,9 +344,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                 alici.sendMessage("§cPuan işlemi sırasında bir hata oluştu: " + ex.getMessage());
                 return;
             }
-        } 
-        // PARA İLE ALIM
-        else {
+        } else {
             if (econ == null) {
                 alici.sendMessage("§cEkonomi sistemi (Vault) sunucuda bulunamadı!");
                 return;
@@ -372,7 +364,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             }
         }
 
-        // Eşyayı alıcıya ver
         Material mat = Material.matchMaterial(esyaIsim.toUpperCase());
         if (mat == null) mat = Material.PAPER;
         
@@ -450,7 +441,14 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                 yml.set("siparisler." + id + ".birim", birim);
                 yml.set("siparisler." + id + ".birim_fiyat", fiyat);
                 yml.set("siparisler." + id + ".toplam_fiyat", toplam);
-                yml.save(pazarDosya);
+                
+                // DÜZELTİLEN KISIM: IOException yakalaması eklendi
+                try {
+                    yml.save(pazarDosya);
+                } catch (IOException ioEx) {
+                    p.sendMessage("§cSipariş kaydedilirken bir hata oluştu!");
+                    ioEx.printStackTrace();
+                }
 
                 p.sendMessage("");
                 p.sendMessage("§8§m----------------------------");
@@ -503,4 +501,4 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         else { int i = 1; for (String s : liste) p.sendMessage("§e" + i++ + ". §f" + s); }
         p.sendMessage("§8§m----------------------------");
     }
-    }
+            }
