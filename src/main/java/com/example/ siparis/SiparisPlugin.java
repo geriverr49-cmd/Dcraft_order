@@ -11,32 +11,26 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
-import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listener {
 
-    private static final Map<UUID, String> BEKLEYEN = new HashMap<>();
     private static final Map<UUID, String> SIPARIS_ADIM = new HashMap<>();
     private static final Map<UUID, String> SIPARIS_ISIM = new HashMap<>();
     private static final Map<UUID, Integer> SIPARIS_MIKTAR = new HashMap<>();
-    private static final Map<UUID, String> SIPARIS_BIRIM = new HashMap<>();
     
-    private File siparisDosya;
     private File pazarDosya;
     private Economy econ = null;
     private Object ppAPI = null;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        siparisDosya = new File(getDataFolder(), "siparisler.txt");
-        
         if (!getDataFolder().exists()) getDataFolder().mkdirs();
         pazarDosya = new File(getDataFolder(), "pazar.yml");
         if (!pazarDosya.exists()) {
@@ -58,95 +52,45 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         }
 
         if (getCommand("siparis") != null) getCommand("siparis").setExecutor(this);
-        if (getCommand("siparisonayla") != null) getCommand("siparisonayla").setExecutor(this);
-        if (getCommand("siparisiptal") != null) getCommand("siparisiptal").setExecutor(this);
-        if (getCommand("siparisler") != null) getCommand("siparisler").setExecutor(this);
-        if (getCommand("pazar") != null) getCommand("pazar").setExecutor(this);
-        
         Bukkit.getPluginManager().registerEvents(this, this);
-
-        getLogger().info("Pazar ve Siparis Sistemi aktif!");
+        getLogger().info("Premium Pazar Sistemi aktif!");
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!(sender instanceof Player p)) {
-            sender.sendMessage("§cSadece oyuncular!");
-            return true;
-        }
-        
-        switch (cmd.getName().toLowerCase()) {
-            case "pazar": pazarMenuAc(p); return true;
-            case "siparis": menuAc(p); return true;
-            case "siparisonayla": onayla(p); return true;
-            case "siparisiptal":
-                BEKLEYEN.remove(p.getUniqueId());
-                SIPARIS_ADIM.remove(p.getUniqueId());
-                p.sendMessage("§cİşlem iptal edildi.");
-                return true;
-            case "siparisler":
-                if (!p.hasPermission("siparis.admin")) { p.sendMessage("§cYetkin yok!"); return true; }
-                siparisleriGoster(p); return true;
-        }
-        return false;
+        if (!(sender instanceof Player p)) return true;
+        pazarMenuAc(p, "hepsi", false);
+        return true;
     }
 
-    private void pazarMenuAc(Player p) {
-        Inventory inv = Bukkit.createInventory(null, 27, "§8§l» §6§lPAZAR SİSTEMİ §8§l«");
-        
-        ItemStack siparis = new ItemStack(Material.PAPER);
-        ItemMeta siparisMeta = siparis.getItemMeta();
-        if (siparisMeta != null) {
-            siparisMeta.setDisplayName("§e§lSipariş Oluştur");
-            siparisMeta.setLore(Arrays.asList("§7Aradığın eşyayı bulamadın mı?", "§7Fiyat ve miktar belirleyip sipariş ver!", "§aTıkla ve eşya ismini sohbete yaz."));
-            siparis.setItemMeta(siparisMeta);
-        }
-        inv.setItem(11, siparis);
-        
-        ItemStack sat = new ItemStack(Material.GOLD_INGOT);
-        ItemMeta satMeta = sat.getItemMeta();
-        if (satMeta != null) {
-            satMeta.setDisplayName("§a§lEşya Sat");
-            satMeta.setLore(Arrays.asList("§7Elindeki eşyayı pazara koy.", "§c(Yakında Eklenecek)"));
-            sat.setItemMeta(satMeta);
-        }
-        inv.setItem(13, sat);
-
-        ItemStack gor = new ItemStack(Material.CHEST);
-        ItemMeta gorMeta = gor.getItemMeta();
-        if (gorMeta != null) {
-            gorMeta.setDisplayName("§b§lAktif Siparişler");
-            gorMeta.setLore(Arrays.asList("§7Diğer oyuncuların açtığı siparişleri gör.", "§7Elindeki eşyayı onlara sat!", "§aTıkla ve pazara göz at."));
-            gor.setItemMeta(gorMeta);
-        }
-        inv.setItem(15, gor);
-
-        ItemStack cam = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cam.setItemMeta(cm); }
-        for (int i = 0; i < 27; i++) if (inv.getItem(i) == null) inv.setItem(i, cam);
-
-        p.openInventory(inv);
-    }
-
-    private void aktifSiparislerMenuAc(Player p) {
-        Inventory inv = Bukkit.createInventory(null, 54, "§8§l» §6§lAKTİF SİPARİŞLER §8§l«");
+    // FİLTRELEME VE MENÜ AÇMA
+    private void pazarMenuAc(Player p, String filtre, boolean kendiSiparislerim) {
+        Inventory inv = Bukkit.createInventory(null, 54, "§8§l» §6§lPAZAR SİSTEMİ §8§l«");
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(pazarDosya);
         
         if (yml.contains("siparisler")) {
             ConfigurationSection section = yml.getConfigurationSection("siparisler");
             int slot = 0;
             for (String id : section.getKeys(false)) {
-                if (slot >= 45) break;
+                if (slot >= 45) break; // Sadece üst 5 satır (0-44)
                 
                 String oyuncu = section.getString(id + ".oyuncu");
                 String esya = section.getString(id + ".esya");
                 int miktar = section.getInt(id + ".miktar");
                 String birim = section.getString(id + ".birim");
-                double birim_fiyat = section.getDouble(id + ".birim_fiyat");
                 double toplam = section.getDouble(id + ".toplam_fiyat");
+                
+                // Kendi siparişlerini göster veya hepsini göster
+                if (kendiSiparislerim && !oyuncu.equals(p.getName())) continue;
                 
                 Material mat = Material.matchMaterial(esya.toUpperCase());
                 if (mat == null) mat = Material.PAPER;
+                
+                // Filtreleme Mantığı
+                if (filtre.equals("bloklar") && !mat.isBlock()) continue;
+                if (filtre.equals("esyalar") && mat.isBlock()) continue;
+                if (filtre.equals("para") && !birim.equals("para")) continue;
+                if (filtre.equals("puan") && !birim.equals("puan")) continue;
                 
                 ItemStack item = new ItemStack(mat);
                 ItemMeta meta = item.getItemMeta();
@@ -154,7 +98,6 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                     meta.setDisplayName("§e" + esya + " §7x" + miktar);
                     meta.setLore(Arrays.asList(
                         "§7Siparişi Veren: §f" + oyuncu,
-                        "§7Birim Fiyat: §a" + birim_fiyat + " " + birim.toUpperCase(),
                         "§7Toplam Fiyat: §a" + toplam + " " + birim.toUpperCase(),
                         "",
                         "§aSatın almak için tıkla!",
@@ -167,136 +110,107 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             }
         }
         
+        // --- ALT MENÜ BUTONLARI (45-53) ---
         ItemStack cam = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
         ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cam.setItemMeta(cm); }
         for (int i = 45; i < 54; i++) inv.setItem(i, cam);
-        
-        ItemStack geri = new ItemStack(Material.BARRIER);
-        ItemMeta geriMeta = geri.getItemMeta();
-        if (geriMeta != null) { geriMeta.setDisplayName("§cGeri Dön"); geri.setItemMeta(geriMeta); }
-        inv.setItem(49, geri);
 
-        p.openInventory(inv);
-    }
-
-    private void birimSecimMenuAc(Player p) {
-        Inventory inv = Bukkit.createInventory(null, 27, "§8§l» §6§lBİRİM SEÇİMİ §8§l«");
-
-        ItemStack para = new ItemStack(Material.GOLD_INGOT);
-        ItemMeta paraMeta = para.getItemMeta();
-        if (paraMeta != null) {
-            paraMeta.setDisplayName("§e§lPARA ile Al");
-            paraMeta.setLore(Arrays.asList("§7Normal sunucu paranı kullanarak", "§7bu siparişi oluşturursun."));
-            para.setItemMeta(paraMeta);
+        // Senin Siparişlerin
+        ItemStack kafa = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta kafaMeta = (SkullMeta) kafa.getItemMeta();
+        if (kafaMeta != null) {
+            kafaMeta.setOwningPlayer(p);
+            kafaMeta.setDisplayName("§d§lSenin Siparişlerin");
+            kafaMeta.setLore(Arrays.asList("§7Sadece senin açtığın siparişleri gör."));
+            kafa.setItemMeta(kafaMeta);
         }
-        inv.setItem(11, para);
+        inv.setItem(45, kafa);
 
-        ItemStack puan = new ItemStack(Material.DIAMOND);
-        ItemMeta puanMeta = puan.getItemMeta();
-        if (puanMeta != null) {
-            puanMeta.setDisplayName("§b§lDCRAFT PUANI ile Al");
-            puanMeta.setLore(Arrays.asList("§7PlayerPoints bakiyeni kullanarak", "§7bu siparişi oluşturursun."));
-            puan.setItemMeta(puanMeta);
+        // Sipariş Ver
+        ItemStack ver = new ItemStack(Material.PAPER);
+        ItemMeta verMeta = ver.getItemMeta();
+        if (verMeta != null) {
+            verMeta.setDisplayName("§a§lSipariş Ver");
+            verMeta.setLore(Arrays.asList("§7Aradığın eşya için sipariş oluştur."));
+            ver.setItemMeta(verMeta);
         }
-        inv.setItem(15, puan);
+        inv.setItem(46, ver);
 
-        ItemStack cam = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cam.setItemMeta(cm); }
-        for (int i = 0; i < 27; i++) if (inv.getItem(i) == null) inv.setItem(i, cam);
+        // Bloklar
+        ItemStack blok = new ItemStack(Material.GRASS_BLOCK);
+        ItemMeta blokMeta = blok.getItemMeta();
+        if (blokMeta != null) { blokMeta.setDisplayName("§2§lSadece Bloklar"); blokMeta.setLore(Arrays.asList("§7Sadece blokları göster.")); blok.setItemMeta(blokMeta); }
+        inv.setItem(48, blok);
 
-        p.openInventory(inv);
-    }
+        // Eşyalar
+        ItemStack esyaF = new ItemStack(Material.DIAMOND_SWORD);
+        ItemMeta esyaMeta = esyaF.getItemMeta();
+        if (esyaMeta != null) { esyaMeta.setDisplayName("§b§lSadece Eşyalar"); esyaMeta.setLore(Arrays.asList("§7Sadece eşyaları göster.")); esyaF.setItemMeta(esyaMeta); }
+        inv.setItem(49, esyaF);
 
-    private void menuAc(Player p) {
-        String baslik = getConfig().getString("menu-baslik", "§6Sipariş");
-        Inventory inv = Bukkit.createInventory(null, 27, baslik);
-        ConfigurationSection urunler = getConfig().getConfigurationSection("urunler");
-        if (urunler != null) {
-            for (String key : urunler.getKeys(false)) {
-                ConfigurationSection u = urunler.getConfigurationSection(key);
-                if (u == null) continue;
-                Material mat = Material.matchMaterial(u.getString("material", "STONE"));
-                if (mat == null) mat = Material.STONE;
-                ItemStack item = new ItemStack(mat);
-                ItemMeta meta = item.getItemMeta();
-                if (meta != null) {
-                    meta.setDisplayName(u.getString("isim", "§eÜrün"));
-                    meta.setLore(u.getStringList("aciklama"));
-                    item.setItemMeta(meta);
-                }
-                inv.setItem(u.getInt("slot", 10), item);
-            }
-        }
-        ItemStack cam = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta cm = cam.getItemMeta(); if (cm != null) { cm.setDisplayName(" "); cam.setItemMeta(cm); }
-        for (int i = 0; i < 27; i++) if (inv.getItem(i) == null) inv.setItem(i, cam);
+        // Puan
+        ItemStack puanF = new ItemStack(Material.DIAMOND);
+        ItemMeta puanMeta = puanF.getItemMeta();
+        if (puanMeta != null) { puanMeta.setDisplayName("§e§lDcraft Puanı"); puanMeta.setLore(Arrays.asList("§7Puanla satılanları göster.")); puanF.setItemMeta(puanMeta); }
+        inv.setItem(50, puanF);
+
+        // Para
+        ItemStack paraF = new ItemStack(Material.GOLD_INGOT);
+        ItemMeta paraMeta = paraF.getItemMeta();
+        if (paraMeta != null) { paraMeta.setDisplayName("§6§lPara"); paraMeta.setLore(Arrays.asList("§7Parayla satılanları göster.")); paraF.setItemMeta(paraMeta); }
+        inv.setItem(51, paraF);
+
+        // Kapat (Bariyer)
+        ItemStack kapat = new ItemStack(Material.BARRIER);
+        ItemMeta kapatMeta = kapat.getItemMeta();
+        if (kapatMeta != null) { kapatMeta.setDisplayName("§c§lKapat"); kapat.setItemMeta(kapatMeta); }
+        inv.setItem(53, kapat);
+
         p.openInventory(inv);
     }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player p)) return;
+        if (!e.getView().getTitle().equals("§8§l» §6§lPAZAR SİSTEMİ §8§l«")) return;
         
-        if (e.getView().getTitle().equals("§8§l» §6§lPAZAR SİSTEMİ §8§l«")) {
-            e.setCancelled(true);
-            ItemStack clicked = e.getCurrentItem();
-            if (clicked == null) return;
-            
-            if (clicked.getType() == Material.PAPER) {
-                p.closeInventory();
-                SIPARIS_ADIM.put(p.getUniqueId(), "ISIM");
-                p.sendMessage("");
-                p.sendMessage("§6§lSİPARİŞ OLUŞTURMA");
-                p.sendMessage("§7Lütfen aradığın eşyanın ismini yaz (Örn: Elmas).");
-                p.sendMessage("§cİptal için 'iptal' yaz.");
-                p.sendMessage("");
-            } else if (clicked.getType() == Material.CHEST) {
-                aktifSiparislerMenuAc(p);
-            }
-            return;
-        }
+        e.setCancelled(true);
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null) return;
 
-        if (e.getView().getTitle().equals("§8§l» §6§lAKTİF SİPARİŞLER §8§l«")) {
-            e.setCancelled(true);
-            ItemStack clicked = e.getCurrentItem();
-            if (clicked == null || clicked.getType() == Material.BLACK_STAINED_GLASS_PANE) return;
-            
-            if (clicked.getType() == Material.BARRIER) {
-                pazarMenuAc(p);
-                return;
-            }
-            
-            if (clicked.hasItemMeta() && clicked.getItemMeta().getLore() != null) {
-                List<String> lore = clicked.getItemMeta().getLore();
-                String id = null;
-                for (String s : lore) {
-                    if (s.startsWith("§8ID: ")) { id = s.replace("§8ID: ", ""); break; }
-                }
-                if (id != null) satinAl(p, id);
-            }
-            return;
-        }
+        // ALT MENÜ TIKLAMALARI
+        if (e.getClickedInventory() == e.getView().getBottomInventory()) return; // Envanter tıklamalarını engelle
 
-        if (e.getView().getTitle().equals("§8§l» §6§lBİRİM SEÇİMİ §8§l«")) {
-            e.setCancelled(true);
-            ItemStack clicked = e.getCurrentItem();
-            if (clicked == null) return;
-            UUID uuid = p.getUniqueId();
-
-            if (clicked.getType() == Material.GOLD_INGOT) {
-                SIPARIS_BIRIM.put(uuid, "para");
-                SIPARIS_ADIM.put(uuid, "FIYAT");
-                p.closeInventory();
-                p.sendMessage("§aBirim: §ePARA");
-                p.sendMessage("§7Son olarak, 1 adetinin fiyatını yaz. (Örn: 15).");
-            } else if (clicked.getType() == Material.DIAMOND) {
-                SIPARIS_BIRIM.put(uuid, "puan");
-                SIPARIS_ADIM.put(uuid, "FIYAT");
-                p.closeInventory();
-                p.sendMessage("§aBirim: §eDCRAFT PUANI (PlayerPoints)");
-                p.sendMessage("§7Son olarak, 1 adetinin fiyatını yaz. (Örn: 15).");
+        if (clicked.getType() == Material.BARRIER) {
+            p.closeInventory();
+        } else if (clicked.getType() == Material.PLAYER_HEAD) {
+            pazarMenuAc(p, "hepsi", true);
+        } else if (clicked.getType() == Material.PAPER) {
+            p.closeInventory();
+            SIPARIS_ADIM.put(p.getUniqueId(), "ISIM");
+            p.sendMessage("");
+            p.sendMessage("§6§lSİPARİŞ OLUŞTURMA");
+            p.sendMessage("§7Lütfen aradığın eşyanın ismini yaz (Örn: Elmas).");
+            p.sendMessage("§cİptal için 'iptal' yaz.");
+            p.sendMessage("");
+        } else if (clicked.getType() == Material.GRASS_BLOCK) {
+            pazarMenuAc(p, "bloklar", false);
+        } else if (clicked.getType() == Material.DIAMOND_SWORD) {
+            pazarMenuAc(p, "esyalar", false);
+        } else if (clicked.getType() == Material.DIAMOND) {
+            pazarMenuAc(p, "puan", false);
+        } else if (clicked.getType() == Material.GOLD_INGOT) {
+            pazarMenuAc(p, "para", false);
+        } 
+        
+        // SİPARİŞ SATIN ALMA
+        else if (clicked.hasItemMeta() && clicked.getItemMeta().getLore() != null) {
+            List<String> lore = clicked.getItemMeta().getLore();
+            String id = null;
+            for (String s : lore) {
+                if (s.startsWith("§8ID: ")) { id = s.replace("§8ID: ", ""); break; }
             }
-            return;
+            if (id != null) satinAl(p, id);
         }
     }
 
@@ -304,11 +218,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(pazarDosya);
         String path = "siparisler." + siparisId;
         
-        if (!yml.contains(path)) {
-            alici.sendMessage("§cBu sipariş artık mevcut değil!");
-            alici.closeInventory();
-            return;
-        }
+        if (!yml.contains(path)) { alici.sendMessage("§cBu sipariş artık mevcut değil!"); alici.closeInventory(); return; }
         
         String saticiIsim = yml.getString(path + ".oyuncu");
         String esyaIsim = yml.getString(path + ".esya");
@@ -316,50 +226,32 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         double toplamFiyat = yml.getDouble(path + ".toplam_fiyat");
         String birim = yml.getString(path + ".birim");
 
-        if (alici.getName().equals(saticiIsim)) {
-            alici.sendMessage("§cKendi siparişini satın alamazsın!");
-            return;
-        }
+        if (alici.getName().equals(saticiIsim)) { alici.sendMessage("§cKendi siparişini satın alamazsın!"); return; }
 
         if (birim.equals("puan")) {
-            if (ppAPI == null) {
-                alici.sendMessage("§cPlayerPoints eklentisi bulunamadı veya aktif değil!");
-                return;
-            }
+            if (ppAPI == null) { alici.sendMessage("§cPlayerPoints bulunamadı!"); return; }
             try {
                 int bakiye = (int) ppAPI.getClass().getMethod("look", UUID.class).invoke(ppAPI, alici.getUniqueId());
-                if (bakiye < toplamFiyat) {
-                    alici.sendMessage("§cYetersiz Dcraft Puanın! Gerekli: §e" + toplamFiyat);
-                    return;
-                }
-                ppAPI.getClass().getMethod("take", UUID.class, int.class).invoke(ppAPI, alici.getUniqueId(), (int) toplamFiyat);
+                if (bakiye < toplamFiyat) { alici.sendMessage("§cYetersiz Dcraft Puanın! Gerekli: §e" + toplamFiyat); return; }
                 
+                ppAPI.getClass().getMethod("take", UUID.class, int.class).invoke(ppAPI, alici.getUniqueId(), (int) toplamFiyat);
                 Player satici = Bukkit.getPlayer(saticiIsim);
                 if (satici != null && satici.isOnline()) {
                     ppAPI.getClass().getMethod("give", UUID.class, int.class).invoke(ppAPI, satici.getUniqueId(), (int) toplamFiyat);
-                    satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini satın aldı! Hesabına §e" + toplamFiyat + " Dcraft Puanı §7eklendi.");
+                    satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini aldı! Hesabına §e" + toplamFiyat + " Puan §7eklendi.");
                 } else {
                     ppAPI.getClass().getMethod("give", UUID.class, int.class).invoke(ppAPI, Bukkit.getOfflinePlayer(saticiIsim).getUniqueId(), (int) toplamFiyat);
                 }
-            } catch (Exception ex) {
-                alici.sendMessage("§cPuan işlemi sırasında bir hata oluştu: " + ex.getMessage());
-                return;
-            }
+            } catch (Exception ex) { alici.sendMessage("§cPuan işlemi hatası!"); return; }
         } else {
-            if (econ == null) {
-                alici.sendMessage("§cEkonomi sistemi (Vault) sunucuda bulunamadı!");
-                return;
-            }
-            if (econ.getBalance(alici) < toplamFiyat) {
-                alici.sendMessage("§cYetersiz bakiyen! Gerekli: §e" + toplamFiyat + " PARA");
-                return;
-            }
-            econ.withdrawPlayer(alici, toplamFiyat);
+            if (econ == null) { alici.sendMessage("§cVault bulunamadı!"); return; }
+            if (econ.getBalance(alici) < toplamFiyat) { alici.sendMessage("§cYetersiz bakiyen! Gerekli: §e" + toplamFiyat); return; }
             
+            econ.withdrawPlayer(alici, toplamFiyat);
             Player satici = Bukkit.getPlayer(saticiIsim);
             if (satici != null && satici.isOnline()) {
                 econ.depositPlayer(satici, toplamFiyat);
-                satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini satın aldı! Hesabına §e" + toplamFiyat + " PARA §7eklendi.");
+                satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini aldı! Hesabına §e" + toplamFiyat + " Para §7eklendi.");
             } else {
                 econ.depositPlayer(Bukkit.getOfflinePlayer(saticiIsim), toplamFiyat);
             }
@@ -367,43 +259,29 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
 
         Material mat = Material.matchMaterial(esyaIsim.toUpperCase());
         if (mat == null) mat = Material.PAPER;
-        
         ItemStack esyaItem = new ItemStack(mat, miktar);
         HashMap<Integer, ItemStack> kalanlar = alici.getInventory().addItem(esyaItem);
-        for (ItemStack kalan : kalanlar.values()) {
-            alici.getWorld().dropItemNaturally(alici.getLocation(), kalan);
-        }
+        for (ItemStack kalan : kalanlar.values()) alici.getWorld().dropItemNaturally(alici.getLocation(), kalan);
 
         yml.set(path, null);
         try { yml.save(pazarDosya); } catch (IOException ex) { ex.printStackTrace(); }
 
-        alici.sendMessage("");
-        alici.sendMessage("§8§m----------------------------");
-        alici.sendMessage("§a§lSATIN ALMA BAŞARILI!");
-        alici.sendMessage("§7Eşya: §e" + esyaIsim + " §7x" + miktar);
-        alici.sendMessage("§7Ödenen: §e" + toplamFiyat + " " + birim.toUpperCase());
-        alici.sendMessage("§8§m----------------------------");
-        alici.closeInventory();
+        alici.sendMessage("§a§l✔ §aSiparişi satın aldın! Eşya envanterine eklendi.");
         alici.playSound(alici.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
+        pazarMenuAc(alici, "hepsi", false); // Menüyü yenile
     }
 
     @EventHandler
     public void onChat(AsyncPlayerChatEvent e) {
         Player p = e.getPlayer();
         UUID uuid = p.getUniqueId();
-        
         if (!SIPARIS_ADIM.containsKey(uuid)) return;
         
         e.setCancelled(true);
         String mesaj = e.getMessage();
-        
         if (mesaj.equalsIgnoreCase("iptal")) {
-            SIPARIS_ADIM.remove(uuid);
-            SIPARIS_ISIM.remove(uuid);
-            SIPARIS_MIKTAR.remove(uuid);
-            SIPARIS_BIRIM.remove(uuid);
-            p.sendMessage("§cİşlem iptal edildi.");
-            return;
+            SIPARIS_ADIM.remove(uuid); SIPARIS_ISIM.remove(uuid); SIPARIS_MIKTAR.remove(uuid);
+            p.sendMessage("§cİşlem iptal edildi."); return;
         }
 
         String adim = SIPARIS_ADIM.get(uuid);
@@ -411,27 +289,35 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         if (adim.equals("ISIM")) {
             SIPARIS_ISIM.put(uuid, mesaj);
             SIPARIS_ADIM.put(uuid, "MIKTAR");
-            p.sendMessage("§aEşya: §e" + mesaj);
-            p.sendMessage("§7Şimdi kaç adet almak istediğini yaz (Sadece sayı, Örn: 32).");
+            p.sendMessage("§7Kaç adet almak istiyorsun? (Sadece sayı yaz)");
         } 
         else if (adim.equals("MIKTAR")) {
             try {
                 int miktar = Integer.parseInt(mesaj);
                 if (miktar <= 0) throw new NumberFormatException();
                 SIPARIS_MIKTAR.put(uuid, miktar);
-                Bukkit.getScheduler().runTask(this, () -> birimSecimMenuAc(p));
-            } catch (NumberFormatException ex) {
-                p.sendMessage("§cLütfen geçerli bir sayı gir!");
-            }
+                SIPARIS_ADIM.put(uuid, "BIRIM");
+                p.sendMessage("§7Hangi birimle satın alacaksın? (para veya puan yaz)");
+            } catch (NumberFormatException ex) { p.sendMessage("§cGeçerli bir sayı gir!"); }
         } 
+        else if (adim.equals("BIRIM")) {
+            if (mesaj.equalsIgnoreCase("para") || mesaj.equalsIgnoreCase("puan")) {
+                SIPARIS_ADIM.put(uuid, "FIYAT");
+                SIPARIS_ISIM.put(uuid, SIPARIS_ISIM.get(uuid) + "|" + mesaj.toLowerCase());
+                p.sendMessage("§7Tanesi için ne kadar §e" + mesaj.toUpperCase() + " §7vermek istersin? (Sadece sayı)");
+            } else {
+                p.sendMessage("§cSadece 'para' veya 'puan' yaz!");
+            }
+        }
         else if (adim.equals("FIYAT")) {
             try {
                 double fiyat = Double.parseDouble(mesaj);
                 if (fiyat <= 0) throw new NumberFormatException();
                 
-                String esya = SIPARIS_ISIM.get(uuid);
+                String[] parts = SIPARIS_ISIM.get(uuid).split("\\|");
+                String esya = parts[0];
+                String birim = parts[1];
                 int miktar = SIPARIS_MIKTAR.get(uuid);
-                String birim = SIPARIS_BIRIM.get(uuid);
                 double toplam = fiyat * miktar;
                 
                 YamlConfiguration yml = YamlConfiguration.loadConfiguration(pazarDosya);
@@ -443,62 +329,14 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
                 yml.set("siparisler." + id + ".birim_fiyat", fiyat);
                 yml.set("siparisler." + id + ".toplam_fiyat", toplam);
                 
-                try {
-                    yml.save(pazarDosya);
-                } catch (IOException ioEx) {
-                    p.sendMessage("§cSipariş kaydedilirken bir hata oluştu!");
-                    ioEx.printStackTrace();
-                }
+                try { yml.save(pazarDosya); } catch (IOException ioEx) { p.sendMessage("§cHata oluştu!"); }
 
-                p.sendMessage("");
-                p.sendMessage("§8§m----------------------------");
-                p.sendMessage("§a§lBAŞARILI!");
-                p.sendMessage("§7Siparişin pazara eklendi.");
-                p.sendMessage("§7Eşya: §e" + esya + " §7x" + miktar);
-                p.sendMessage("§7Toplam Fiyat: §e" + toplam + " " + birim.toUpperCase());
-                p.sendMessage("§8§m----------------------------");
+                p.sendMessage("§a§l✔ §aSiparişin pazara eklendi!");
+                p.sendTitle("§a§lSİPARİŞ VERİLDİ", "§7Pazara eklendi!", 10, 40, 10);
                 
-            } catch (NumberFormatException ex) {
-                p.sendMessage("§cLütfen geçerli bir fiyat gir!");
-            }
+            } catch (NumberFormatException ex) { p.sendMessage("§cGeçerli bir fiyat gir!"); }
             
-            SIPARIS_ADIM.remove(uuid);
-            SIPARIS_ISIM.remove(uuid);
-            SIPARIS_MIKTAR.remove(uuid);
-            SIPARIS_BIRIM.remove(uuid);
+            SIPARIS_ADIM.remove(uuid); SIPARIS_ISIM.remove(uuid); SIPARIS_MIKTAR.remove(uuid);
         }
     }
-
-    private void onayla(Player p) {
-        String veri = BEKLEYEN.remove(p.getUniqueId());
-        if (veri == null) { p.sendMessage("§cBekleyen siparişin yok!"); return; }
-        String[] parca = veri.split("\\|");
-        String urun = parca[0];
-        double fiyat = Double.parseDouble(parca[1]);
-        
-        try {
-            if (!siparisDosya.exists()) siparisDosya.createNewFile();
-            String tarih = new SimpleDateFormat("dd/MM/yyyy HH:mm").format(new Date());
-            String satir = String.format("[%s] %s -> %s (%.2f TL)%n", tarih, p.getName(), urun, fiyat);
-            try (FileWriter fw = new FileWriter(siparisDosya, true)) { fw.write(satir); }
-        } catch (IOException ex) { getLogger().warning("Kaydedilemedi: " + ex.getMessage()); }
-
-        p.sendMessage("§a§l✔ §aSiparişin alındı!");
-        p.sendTitle("§a§lSİPARİŞ ALINDI", "§7Teşekkürler!", 10, 50, 10);
-    }
-
-    private void siparisleriGoster(Player p) {
-        List<String> liste = new ArrayList<>();
-        if (siparisDosya.exists()) {
-            try (BufferedReader br = new BufferedReader(new FileReader(siparisDosya))) {
-                String line;
-                while ((line = br.readLine()) != null) liste.add(line);
-            } catch (IOException ignored) {}
-        }
-        p.sendMessage("§8§m----------------------------");
-        p.sendMessage("§6§l  SİPARİŞLER §7(" + liste.size() + ")");
-        if (liste.isEmpty()) p.sendMessage("§7Henüz sipariş yok.");
-        else { int i = 1; for (String s : liste) p.sendMessage("§e" + i++ + ". §f" + s); }
-        p.sendMessage("§8§m----------------------------");
-    }
-                                         }
+                                                     }
