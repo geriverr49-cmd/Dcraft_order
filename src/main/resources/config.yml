@@ -1,0 +1,27 @@
+menu-baslik: "§8§l» §6§lSİPARİŞ §8§l«"
+
+urunler:
+  vip:
+    isim: "§6§lVIP Üyelik"
+    aciklama:
+      - "§7Sunucuda VIP ol!"
+      - "§7Fiyat: §e50 TL"
+    material: NETHER_STAR
+    slot: 11
+    fiyat: 50
+  elmas:
+    isim: "§b§lElmas Paketi"
+    aciklama:
+      - "§7Özel elmas paketi"
+      - "§7Fiyat: §e25 TL"
+    material: DIAMOND
+    slot: 13
+    fiyat: 25
+  kasa:
+    isim: "§d§lEfsanevi Kasa"
+    aciklama:
+      - "§7İçinde ne var belli değil!"
+      - "§7Fiyat: §e75 TL"
+    material: CHEST
+    slot: 15
+    fiyat: 75
