@@ -1,8 +1,6 @@
 package com.example.siparis;
 
 import net.milkbowl.vault.economy.Economy;
-import org.black_ixx.playerpoints.PlayerPoints;
-import org.black_ixx.playerpoints.PlayerPointsAPI;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.configuration.ConfigurationSection;
@@ -13,6 +11,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -31,7 +30,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
     private File siparisDosya;
     private File pazarDosya;
     private Economy econ = null;
-    private PlayerPointsAPI ppAPI = null;
+    private Object ppAPI = null;
 
     @Override
     public void onEnable() {
@@ -50,9 +49,14 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
             if (rsp != null) econ = rsp.getProvider();
         }
 
-        // PlayerPoints Bağlantısı
-        if (getServer().getPluginManager().getPlugin("PlayerPoints") != null) {
-            ppAPI = PlayerPoints.getInstance().getAPI();
+        // PlayerPoints Bağlantısı (Reflection ile)
+        Plugin ppPlugin = getServer().getPluginManager().getPlugin("PlayerPoints");
+        if (ppPlugin != null && ppPlugin.isEnabled()) {
+            try {
+                ppAPI = ppPlugin.getClass().getMethod("getAPI").invoke(ppPlugin);
+            } catch (Exception e) {
+                getLogger().warning("PlayerPoints API yuklenemedi: " + e.getMessage());
+            }
         }
 
         getCommand("siparis").setExecutor(this);
@@ -297,7 +301,7 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         }
     }
 
-    // PLAYERPOINTS ENTEGRELİ SATIN ALMA MANTIĞI
+    // YENİ NESİL SATIN ALMA MANTIĞI (Hatasız Derleme İçin)
     private void satinAl(Player alici, String siparisId) {
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(pazarDosya);
         String path = "siparisler." + siparisId;
@@ -322,22 +326,29 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         // PUAN İLE ALIM
         if (birim.equals("puan")) {
             if (ppAPI == null) {
-                alici.sendMessage("§cPlayerPoints eklentisi bulunamadı!");
+                alici.sendMessage("§cPlayerPoints eklentisi bulunamadı veya aktif değil!");
                 return;
             }
-            int bakiye = ppAPI.look(alici.getUniqueId());
-            if (bakiye < toplamFiyat) {
-                alici.sendMessage("§cYetersiz Dcraft Puanın! Gerekli: §e" + toplamFiyat);
+            try {
+                // Bakiye kontrolü (Reflection)
+                int bakiye = (int) ppAPI.getClass().getMethod("look", UUID.class).invoke(ppAPI, alici.getUniqueId());
+                if (bakiye < toplamFiyat) {
+                    alici.sendMessage("§cYetersiz Dcraft Puanın! Gerekli: §e" + toplamFiyat);
+                    return;
+                }
+                // Puanı düş
+                ppAPI.getClass().getMethod("take", UUID.class, int.class).invoke(ppAPI, alici.getUniqueId(), (int) toplamFiyat);
+                
+                Player satici = Bukkit.getPlayer(saticiIsim);
+                if (satici != null && satici.isOnline()) {
+                    ppAPI.getClass().getMethod("give", UUID.class, int.class).invoke(ppAPI, satici.getUniqueId(), (int) toplamFiyat);
+                    satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini satın aldı! Hesabına §e" + toplamFiyat + " Dcraft Puanı §7eklendi.");
+                } else {
+                    ppAPI.getClass().getMethod("give", UUID.class, int.class).invoke(ppAPI, Bukkit.getOfflinePlayer(saticiIsim).getUniqueId(), (int) toplamFiyat);
+                }
+            } catch (Exception ex) {
+                alici.sendMessage("§cPuan işlemi sırasında bir hata oluştu: " + ex.getMessage());
                 return;
-            }
-            ppAPI.take(alici.getUniqueId(), (int) toplamFiyat);
-            
-            Player satici = Bukkit.getPlayer(saticiIsim);
-            if (satici != null && satici.isOnline()) {
-                ppAPI.give(satici.getUniqueId(), (int) toplamFiyat);
-                satici.sendMessage("§a[Pazar] §e" + alici.getName() + " §7senin siparişini satın aldı! Hesabına §e" + toplamFiyat + " Dcraft Puanı §7eklendi.");
-            } else {
-                ppAPI.give(Bukkit.getOfflinePlayer(saticiIsim).getUniqueId(), (int) toplamFiyat);
             }
         } 
         // PARA İLE ALIM
@@ -492,4 +503,4 @@ public class SiparisPlugin extends JavaPlugin implements CommandExecutor, Listen
         else { int i = 1; for (String s : liste) p.sendMessage("§e" + i++ + ". §f" + s); }
         p.sendMessage("§8§m----------------------------");
     }
-}
+    }
