@@ -3,10 +3,10 @@ version: 1.0.0
 main: com.example.siparis.SiparisPlugin
 api-version: 1.21
 author: Sen
-description: Premium pazar sistemi
+description: Premium order sistemi
 softdepend: [Vault, PlayerPoints]
 
 commands:
   siparis:
-    description: Pazar menusunu acar
+    description: Order menusunu acar
     aliases: [order, sipariş]
